@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- SECTION 1 : Header -->
+    <header class="header">
+      <div class="header-top">
+        <svg xmlns="http://www.w3.org/2000/svg" class="header-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+        <h1>Expense Tracker</h1>
+      </div>
+      <p>Track your daily spending</p>
+    </header>
+
+    <!-- SECTION 2 : Summary Bar -->
+    <div class="summary">
+      <div class="total-box">
+        <p>Total Spent</p>
+        <h2 id="total-amount">₹0.00</h2>
+      </div>
+      <div class="count-box">
+        <p>Expenses</p>
+        <h2 id="expense-count">0 expenses</h2>
+      </div>
+    </div>
+
+    <!-- SECTION 3 : Input Form -->
+    <div class="input-section">
+      <input
+        type="text"
+        id="expense-name"
+        placeholder="Expense name (e.g. Coffee)"
+      >
+      <div class="input-row">
+        <input
+          type="number"
+          id="expense-amount"
+          placeholder="Amount (₹)"
+        >
+        <button id="add-btn">+ Add</button>
+      </div>
+    </div>
+
+    <!-- SECTION 4 : Expense List -->
+    <div class="list-section">
+      <p class="list-label">Recent Expenses</p>
+      <div class="list-wrapper">
+        <div id="expense-list"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
