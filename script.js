@@ -1,122 +1,307 @@
 // ─────────────────────────────────────────
-//  EXPENSE TRACKER — JavaScript Logic
-//  Design by you · Logic by Claude
+//  EXPENSE TRACKER — script.js
+//  Firebase Auth + Firestore
 // ─────────────────────────────────────────
 
-let expenses = [];
+// ── FIREBASE CONFIG ──
+const firebaseConfig = {
+  apiKey: "AIzaSyBsUnxy10-PTnajWsbnIk41oXXQNKX-aYw",
+  authDomain: "expense-tracker-9b6f4.firebaseapp.com",
+  projectId: "expense-tracker-9b6f4",
+  storageBucket: "expense-tracker-9b6f4.firebasestorage.app",
+  messagingSenderId: "740282931834",
+  appId: "1:740282931834:web:ae5d6243217475f3e2b9c3"
+};
 
-// ── Load saved data when page opens ──
-function loadExpenses() {
-  const saved = localStorage.getItem('tushar_expenses');
-  if (saved) {
-    expenses = JSON.parse(saved);
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── APP STATE ──
+let currentUser  = null;
+let allExpenses  = [];
+let currentPeriod = 'monthly';
+let currentMonth  = new Date().getMonth();      // 0–11
+let currentYear   = new Date().getFullYear();
+let activeFilter  = 'all';
+let selectedCat   = 'Food';
+let authMode      = 'login';
+let unsubscribe   = null;
+
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+const CAT_BG = {
+  Food: '#fef3c7', Home: '#dcfce7', Birthday: '#fce7f3',
+  Travel: '#e0f2fe', Shopping: '#f3e8ff', Health: '#d1fae5',
+  Entertainment: '#fef9c3', Other: '#f3f4f6'
+};
+
+const CAT_EMOJI = {
+  Food:'🍔', Home:'🏠', Birthday:'🎂', Travel:'🚌',
+  Shopping:'🛍️', Health:'💊', Entertainment:'🎮', Other:'📌'
+};
+
+// ═══════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════
+
+// Listen for login/logout
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    const name = user.displayName || user.email.split('@')[0];
+    document.getElementById('user-name').textContent  = name + ' 👋';
+    document.getElementById('user-avatar').textContent = name.charAt(0).toUpperCase();
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display  = 'flex';
+    updatePeriodUI();
+    startListening();
+  } else {
+    currentUser = null;
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app-screen').style.display  = 'none';
   }
-  renderList();
-  updateSummary();
+});
+
+// Toggle Login ↔ Signup form
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  const isSignup = authMode === 'signup';
+  document.getElementById('auth-title').textContent         = isSignup ? 'Create Account' : 'Welcome back';
+  document.getElementById('auth-btn').textContent           = isSignup ? 'Sign Up'        : 'Log In';
+  document.getElementById('auth-switch-link').textContent   = isSignup ? 'Log In'         : 'Sign Up';
+  document.getElementById('name-group').style.display       = isSignup ? 'block'          : 'none';
+  document.getElementById('auth-error').textContent         = '';
+  document.querySelector('.auth-switch').firstChild.textContent =
+    isSignup ? 'Already have an account? ' : "Don't have an account? ";
 }
 
-// ── Save data to browser storage ──
-function saveExpenses() {
-  localStorage.setItem('tushar_expenses', JSON.stringify(expenses));
+// Handle Login / Signup button
+async function handleAuth() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl    = document.getElementById('auth-error');
+  errEl.textContent = '';
+
+  if (!email || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
+
+  try {
+    if (authMode === 'login') {
+      await auth.signInWithEmailAndPassword(email, password);
+    } else {
+      const name = document.getElementById('auth-name').value.trim();
+      if (!name) { errEl.textContent = 'Please enter your name.'; return; }
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName: name });
+      // Refresh so displayName updates
+      currentUser = auth.currentUser;
+      const n = currentUser.displayName || email.split('@')[0];
+      document.getElementById('user-name').textContent   = n + ' 👋';
+      document.getElementById('user-avatar').textContent = n.charAt(0).toUpperCase();
+    }
+  } catch (err) {
+    errEl.textContent = err.message.replace('Firebase: ', '');
+  }
 }
 
-// ── Add new expense ──
-function addExpense() {
-  const nameInput   = document.getElementById('expense-name');
-  const amountInput = document.getElementById('expense-amount');
+// Logout
+function logout() {
+  if (confirm('Are you sure you want to logout?')) auth.signOut();
+}
 
-  const name   = nameInput.value.trim();
-  const amount = parseFloat(amountInput.value);
+// Enter key on auth form
+document.addEventListener('keypress', e => {
+  if (e.key === 'Enter' && document.getElementById('auth-screen').style.display !== 'none') {
+    handleAuth();
+  }
+});
 
-  // Validation — stop if fields are empty or invalid
-  if (!name) {
-    alert('Please enter an expense name.');
-    nameInput.focus();
+// ═══════════════════════════════════════
+//  FIRESTORE — REAL-TIME LISTENER
+// ═══════════════════════════════════════
+
+function startListening() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = db.collection('expenses')
+    .where('userId', '==', currentUser.uid)
+    .onSnapshot(snapshot => {
+      allExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort newest first by date string (YYYY-MM-DD sorts correctly)
+      allExpenses.sort((a, b) => (b.date > a.date ? 1 : -1));
+      renderExpenses();
+    }, err => console.error('Firestore error:', err));
+}
+
+// ═══════════════════════════════════════
+//  ADD EXPENSE
+// ═══════════════════════════════════════
+
+async function addExpense() {
+  const name    = document.getElementById('expense-name').value.trim();
+  const amount  = parseFloat(document.getElementById('expense-amount').value);
+  const dateVal = document.getElementById('expense-date').value;  // YYYY-MM-DD
+
+  if (!name)                    { alert('Please enter expense name.');    return; }
+  if (isNaN(amount) || amount <= 0) { alert('Please enter a valid amount.'); return; }
+  if (!dateVal)                 { alert('Please select a date.');          return; }
+
+  const [year, month] = dateVal.split('-').map(Number);  // month = 1–12
+
+  try {
+    await db.collection('expenses').add({
+      userId  : currentUser.uid,
+      name    : name,
+      amount  : amount,
+      category: selectedCat,
+      date    : dateVal,      // "YYYY-MM-DD"
+      month   : month,        // 1–12
+      year    : year,
+      addedAt : firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeModal();
+  } catch (err) {
+    alert('Error saving: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════
+//  DELETE EXPENSE
+// ═══════════════════════════════════════
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  try {
+    await db.collection('expenses').doc(id).delete();
+  } catch (err) {
+    alert('Error deleting: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════
+//  RENDER EXPENSE LIST
+// ═══════════════════════════════════════
+
+function renderExpenses() {
+  let list = [...allExpenses];
+
+  // Filter by selected period
+  if (currentPeriod === 'monthly') {
+    list = list.filter(e => e.month === currentMonth + 1 && e.year === currentYear);
+  } else {
+    list = list.filter(e => e.year === currentYear);
+  }
+
+  // Filter by category
+  if (activeFilter !== 'all') {
+    list = list.filter(e => e.category === activeFilter);
+  }
+
+  // Update summary
+  const total = list.reduce((sum, e) => sum + e.amount, 0);
+  document.getElementById('total-amount').textContent  = '₹' + total.toFixed(2);
+  document.getElementById('expense-count').textContent =
+    list.length + ' expense' + (list.length !== 1 ? 's' : '');
+
+  // Render items
+  const el = document.getElementById('expense-list');
+  if (list.length === 0) {
+    el.innerHTML = '<p class="empty-msg">No expenses found!</p>';
     return;
   }
-  if (isNaN(amount) || amount <= 0) {
-    alert('Please enter a valid amount greater than 0.');
-    amountInput.focus();
-    return;
-  }
 
-  // Build expense object
-  const expense = {
-    id     : Date.now(),                              // unique ID using timestamp
-    name   : name,
-    amount : amount,
-    date   : new Date().toLocaleDateString('en-IN')   // e.g. 16/06/2026
-  };
-
-  expenses.push(expense);
-  saveExpenses();
-  renderList();
-  updateSummary();
-
-  // Clear inputs and focus name field for next entry
-  nameInput.value   = '';
-  amountInput.value = '';
-  nameInput.focus();
-}
-
-// ── Delete one expense by ID ──
-function deleteExpense(id) {
-  expenses = expenses.filter(exp => exp.id !== id);
-  saveExpenses();
-  renderList();
-  updateSummary();
-}
-
-// ── Render the expense list ──
-function renderList() {
-  const list = document.getElementById('expense-list');
-
-  if (expenses.length === 0) {
-    list.innerHTML = '<p class="empty-msg">No expenses yet. Add one above!</p>';
-    return;
-  }
-
-  // Newest expense shown at top
-  const reversed = [...expenses].reverse();
-
-  list.innerHTML = reversed.map(exp => `
-    <div class="expense-item" id="item-${exp.id}">
+  el.innerHTML = list.map(e => `
+    <div class="expense-item">
+      <div class="expense-emoji" style="background:${CAT_BG[e.category] || '#f3f4f6'}">
+        ${CAT_EMOJI[e.category] || '📌'}
+      </div>
       <div class="expense-info">
-        <span class="expense-name">${exp.name}</span>
-        <span class="expense-date">${exp.date}</span>
+        <span class="expense-name">${e.name}</span>
+        <span class="expense-meta">${e.category} · ${formatDate(e.date)}</span>
       </div>
       <div class="expense-right">
-        <span class="expense-amount">₹${exp.amount.toFixed(2)}</span>
-        <button class="delete-btn" onclick="deleteExpense(${exp.id})">Delete</button>
+        <span class="expense-amount">₹${e.amount.toFixed(2)}</span>
+        <button class="del-btn" onclick="deleteExpense('${e.id}')">✕</button>
       </div>
     </div>
   `).join('');
 }
 
-// ── Update total and count ──
-function updateSummary() {
-  const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  document.getElementById('total-amount').textContent  = '₹' + total.toFixed(2);
-  document.getElementById('expense-count').textContent = expenses.length + ' expense' + (expenses.length !== 1 ? 's' : '');
+// "2026-06-15" → "15 Jun 2026"
+function formatDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(day)} ${mon[parseInt(m)-1]} ${y}`;
 }
 
-// ── Keyboard shortcuts ──
-// Press Enter on name field → jump to amount field
-document.getElementById('expense-name').addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') {
-    document.getElementById('expense-amount').focus();
-  }
-});
+// ═══════════════════════════════════════
+//  PERIOD (Monthly / Yearly)
+// ═══════════════════════════════════════
 
-// Press Enter on amount field → add expense
-document.getElementById('expense-amount').addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') {
-    addExpense();
-  }
-});
+function setPeriod(p) {
+  currentPeriod = p;
+  document.getElementById('btn-monthly').classList.toggle('active', p === 'monthly');
+  document.getElementById('btn-yearly').classList.toggle('active',  p === 'yearly');
+  document.getElementById('month-nav').style.display = p === 'monthly' ? 'flex' : 'none';
+  document.getElementById('year-nav').style.display  = p === 'yearly'  ? 'flex' : 'none';
+  updatePeriodUI();
+  renderExpenses();
+}
 
-// ── Button click ──
-document.getElementById('add-btn').addEventListener('click', addExpense);
+function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth < 0)  { currentMonth = 11; currentYear--; }
+  if (currentMonth > 11) { currentMonth = 0;  currentYear++; }
+  updatePeriodUI();
+  renderExpenses();
+}
 
-// ── Run everything on page load ──
-loadExpenses();
+function changeYear(dir) {
+  currentYear += dir;
+  updatePeriodUI();
+  renderExpenses();
+}
+
+function updatePeriodUI() {
+  document.getElementById('month-label').textContent = MONTHS[currentMonth] + ' ' + currentYear;
+  document.getElementById('year-label').textContent  = currentYear;
+  const lbl = currentPeriod === 'monthly' ? MONTHS[currentMonth] : currentYear;
+  document.getElementById('total-label').textContent = 'Total Spent — ' + lbl;
+}
+
+// ═══════════════════════════════════════
+//  CATEGORY FILTER
+// ═══════════════════════════════════════
+
+function filterCat(el, cat) {
+  document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  activeFilter = cat;
+  renderExpenses();
+}
+
+// ═══════════════════════════════════════
+//  ADD EXPENSE MODAL
+// ═══════════════════════════════════════
+
+function openModal() {
+  // Default date = today
+  document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('expense-name').value   = '';
+  document.getElementById('expense-amount').value = '';
+  document.getElementById('modal-bg').style.display  = 'block';
+  document.getElementById('add-modal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').style.display  = 'none';
+  document.getElementById('add-modal').style.display = 'none';
+}
+
+function selectCat(el) {
+  document.querySelectorAll('.mcat').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedCat = el.dataset.cat;
+}

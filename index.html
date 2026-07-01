@@ -2,65 +2,159 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Expense Tracker</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="container">
-
-    <!-- SECTION 1 : Header -->
-    <header class="header">
-      <div class="header-top">
-        <svg xmlns="http://www.w3.org/2000/svg" class="header-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+  <!-- ══════════════════════════
+       AUTH SCREEN (Login/Signup)
+  ══════════════════════════ -->
+  <div id="auth-screen" class="screen auth-screen">
+    <div class="auth-hero">
+      <div class="auth-logo-box">
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
         </svg>
-        <h1>Expense Tracker</h1>
       </div>
-      <p>Track your daily spending</p>
-    </header>
-
-    <!-- SECTION 2 : Summary Bar -->
-    <div class="summary">
-      <div class="total-box">
-        <p>Total Spent</p>
-        <h2 id="total-amount">₹0.00</h2>
-      </div>
-      <div class="count-box">
-        <p>Expenses</p>
-        <h2 id="expense-count">0 expenses</h2>
-      </div>
+      <h1 class="auth-app-name">Expense Tracker</h1>
+      <p class="auth-tagline">Your money, organized</p>
     </div>
 
-    <!-- SECTION 3 : Input Form -->
-    <div class="input-section">
-      <input
-        type="text"
-        id="expense-name"
-        placeholder="Expense name (e.g. Coffee)"
-      >
-      <div class="input-row">
-        <input
-          type="number"
-          id="expense-amount"
-          placeholder="Amount (₹)"
-        >
-        <button id="add-btn">+ Add</button>
-      </div>
-    </div>
+    <div class="auth-card">
+      <h2 class="auth-card-title" id="auth-title">Welcome back</h2>
 
-    <!-- SECTION 4 : Expense List -->
-    <div class="list-section">
-      <p class="list-label">Recent Expenses</p>
-      <div class="list-wrapper">
-        <div id="expense-list"></div>
+      <div id="name-group" style="display:none">
+        <input type="text" id="auth-name" class="auth-input" placeholder="Your name">
       </div>
-    </div>
+      <input type="email" id="auth-email" class="auth-input" placeholder="Email address">
+      <input type="password" id="auth-password" class="auth-input" placeholder="Password">
 
+      <p id="auth-error" class="auth-error"></p>
+
+      <button id="auth-btn" class="primary-btn" onclick="handleAuth()">Log In</button>
+
+      <p class="auth-switch">
+        Don't have an account?
+        <span id="auth-switch-link" onclick="toggleAuthMode()">Sign Up</span>
+      </p>
+    </div>
   </div>
 
+  <!-- ══════════════════════════
+       APP SCREEN (Dashboard)
+  ══════════════════════════ -->
+  <div id="app-screen" class="screen app-screen" style="display:none">
+
+    <div class="app-scroll">
+
+      <!-- TOP BAR -->
+      <div class="top-bar">
+        <div>
+          <p class="top-sub">Welcome back</p>
+          <p class="top-name" id="user-name">User 👋</p>
+        </div>
+        <div class="avatar" id="user-avatar">U</div>
+      </div>
+
+      <!-- MONTHLY / YEARLY TOGGLE -->
+      <div class="period-toggle">
+        <div class="period-btn active" id="btn-monthly" onclick="setPeriod('monthly')">Monthly</div>
+        <div class="period-btn" id="btn-yearly" onclick="setPeriod('yearly')">Yearly</div>
+      </div>
+
+      <!-- MONTH NAVIGATOR -->
+      <div class="period-nav" id="month-nav">
+        <button class="nav-arrow" onclick="changeMonth(-1)">&#8249;</button>
+        <span class="period-label" id="month-label">June 2026</span>
+        <button class="nav-arrow" onclick="changeMonth(1)">&#8250;</button>
+      </div>
+
+      <!-- YEAR NAVIGATOR -->
+      <div class="period-nav" id="year-nav" style="display:none">
+        <button class="nav-arrow" onclick="changeYear(-1)">&#8249;</button>
+        <span class="period-label" id="year-label">2026</span>
+        <button class="nav-arrow" onclick="changeYear(1)">&#8250;</button>
+      </div>
+
+      <!-- TOTAL CARD -->
+      <div class="total-card">
+        <p class="total-card-label" id="total-label">Total Spent — June</p>
+        <p class="total-card-amount" id="total-amount">₹0.00</p>
+        <p class="total-card-count" id="expense-count">0 expenses</p>
+      </div>
+
+      <!-- CATEGORY CHIPS -->
+      <div class="cat-scroll">
+        <div class="cat-chip active" data-cat="all"           onclick="filterCat(this,'all')">All</div>
+        <div class="cat-chip" data-cat="Food"           onclick="filterCat(this,'Food')">🍔 Food</div>
+        <div class="cat-chip" data-cat="Home"           onclick="filterCat(this,'Home')">🏠 Home</div>
+        <div class="cat-chip" data-cat="Birthday"       onclick="filterCat(this,'Birthday')">🎂 Birthday</div>
+        <div class="cat-chip" data-cat="Travel"         onclick="filterCat(this,'Travel')">🚌 Travel</div>
+        <div class="cat-chip" data-cat="Shopping"       onclick="filterCat(this,'Shopping')">🛍️ Shopping</div>
+        <div class="cat-chip" data-cat="Health"         onclick="filterCat(this,'Health')">💊 Health</div>
+        <div class="cat-chip" data-cat="Entertainment"  onclick="filterCat(this,'Entertainment')">🎮 Entertainment</div>
+        <div class="cat-chip" data-cat="Other"          onclick="filterCat(this,'Other')">📌 Other</div>
+      </div>
+
+      <!-- EXPENSE LIST -->
+      <div class="list-area">
+        <p class="list-label">Expenses</p>
+        <div class="list-card" id="expense-list">
+          <p class="empty-msg">No expenses yet. Tap + to add one!</p>
+        </div>
+      </div>
+
+    </div><!-- end .app-scroll -->
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+      <div class="bnav-item active">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        <span>Home</span>
+      </div>
+      <div class="bnav-fab" onclick="openModal()">+</div>
+      <div class="bnav-item" onclick="logout()">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        <span>Logout</span>
+      </div>
+    </div>
+
+  </div><!-- end #app-screen -->
+
+  <!-- ══════════════════════════
+       ADD EXPENSE MODAL (Bottom Sheet)
+  ══════════════════════════ -->
+  <div id="modal-bg" class="modal-bg" onclick="closeModal()" style="display:none"></div>
+  <div id="add-modal" class="add-modal" style="display:none">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">Add Expense</h3>
+    <input type="text"   id="expense-name"   class="modal-input" placeholder="Expense name (e.g. Coffee)">
+    <input type="number" id="expense-amount" class="modal-input" placeholder="Amount (₹)">
+    <input type="date"   id="expense-date"   class="modal-input">
+    <p class="modal-cat-label">Category</p>
+    <div class="modal-cats">
+      <div class="mcat active" data-cat="Food"          onclick="selectCat(this)">🍔 Food</div>
+      <div class="mcat" data-cat="Home"          onclick="selectCat(this)">🏠 Home</div>
+      <div class="mcat" data-cat="Birthday"      onclick="selectCat(this)">🎂 Birthday</div>
+      <div class="mcat" data-cat="Travel"        onclick="selectCat(this)">🚌 Travel</div>
+      <div class="mcat" data-cat="Shopping"      onclick="selectCat(this)">🛍️ Shopping</div>
+      <div class="mcat" data-cat="Health"        onclick="selectCat(this)">💊 Health</div>
+      <div class="mcat" data-cat="Entertainment" onclick="selectCat(this)">🎮 Entertainment</div>
+      <div class="mcat" data-cat="Other"         onclick="selectCat(this)">📌 Other</div>
+    </div>
+    <button class="primary-btn" onclick="addExpense()">Add Expense</button>
+  </div>
+
+  <!-- Firebase CDN (no npm needed) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
